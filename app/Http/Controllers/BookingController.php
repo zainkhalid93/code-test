@@ -35,17 +35,21 @@ class BookingController extends Controller
      */
     public function index(Request $request)
     {
-        if($user_id = $request->get('user_id')) {
+        try {
+            if ($user_id = $request->get('user_id')) {
 
-            $response = $this->repository->getUsersJobs($user_id);
+                $response = $this->repository->getUsersJobs($user_id);
 
+            } elseif ($request->__authenticatedUser->user_type == env('ADMIN_ROLE_ID') || $request->__authenticatedUser->user_type == env('SUPERADMIN_ROLE_ID')) {
+                $response = $this->repository->getAll($request);
+            }
+            $code = 200;
+        } catch (\Exception $exception) {
+            $response = [];
+            $code = 404;
         }
-        elseif($request->__authenticatedUser->user_type == env('ADMIN_ROLE_ID') || $request->__authenticatedUser->user_type == env('SUPERADMIN_ROLE_ID'))
-        {
-            $response = $this->repository->getAll($request);
-        }
 
-        return response($response);
+        return response($response, $code);
     }
 
     /**
@@ -54,9 +58,15 @@ class BookingController extends Controller
      */
     public function show($id)
     {
-        $job = $this->repository->with('translatorJobRel.user')->find($id);
+        $job = null;
+        try {
+            $job = $this->repository->with('translatorJobRel.user')->find($id);
+            $code = 200;
+        } catch (\Exception $exception) {
+            $code = 404;
+        }
+        return response($job, $code);
 
-        return response($job);
     }
 
     /**
@@ -65,11 +75,17 @@ class BookingController extends Controller
      */
     public function store(Request $request)
     {
-        $data = $request->all();
+        $response = [];
+        try {
+            $data = $request->all();
+            $response = $this->repository->store($request->__authenticatedUser, $data);
+            $code = $response['status'] == 'success' ? 201 : 400;
+        } catch (\Exception $exception) {
+            $code = 500;
+        }
 
-        $response = $this->repository->store($request->__authenticatedUser, $data);
 
-        return response($response);
+        return response($response, $code);
 
     }
 
@@ -107,7 +123,7 @@ class BookingController extends Controller
      */
     public function getHistory(Request $request)
     {
-        if($user_id = $request->get('user_id')) {
+        if ($user_id = $request->get('user_id')) {
 
             $response = $this->repository->getUsersJobsHistory($user_id, $request);
             return response($response);
@@ -217,12 +233,12 @@ class BookingController extends Controller
         }
 
         if ($data['flagged'] == 'true') {
-            if($data['admincomment'] == '') return "Please, add comment";
+            if ($data['admincomment'] == '') return "Please, add comment";
             $flagged = 'yes';
         } else {
             $flagged = 'no';
         }
-        
+
         if ($data['manually_handled'] == 'true') {
             $manually_handled = 'yes';
         } else {
